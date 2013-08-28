@@ -35,18 +35,18 @@ head(makesModels)
 # models for toyota
 makesModels[makesModels$make == "toyota",]
 # models for chrysler
-makesModels[makesModels$make == "chrysler",]
+makesModels[makesModels$make == "subaru",]
 
 # function to get a list of styles for make->model->year 
 
 stylefn<-function(pickmake,pickmodel,pickyr){
-  
-  # URL to extract JSON file
   resURL=paste("https://api.edmunds.com/api/vehicle/v2/",
                pickmake,"/",pickmodel,"/",pickyr,"?fmt=json&api_key=",
                APIkey,sep="")
   # convert JSON to list
-  stylesJSON<-fromJSON(getURLContent(resURL))
+  Sys.sleep(0.6) #added delay becuase Edmund API doesn't allow request rates >2/sec
+  step2<-getURLContent(resURL)
+  stylesJSON<-fromJSON(step2)
   # extract style info from the list into a dataframe
   styles<-sapply(stylesJSON$styles,function(x) c(x$id,x$name,x$trim))
   styles<-data.frame(t(styles),stringsAsFactors=FALSE) #t is matrix transpose
@@ -58,52 +58,46 @@ stylefn<-function(pickmake,pickmodel,pickyr){
 }
 
 # test stylefn
-pickmake<-"toyota"
-pickmodel<-"camry"
+pickmake<-"subaru"
+pickmodel<-"forester"
 pickyr=2010
-test=stylefn(pickmake,pickmodel,pickyr)
+test<-stylefn(pickmake,pickmodel,pickyr);test
 
 # pick make and model
 pickmake<-"toyota"
 pickmodel<-"corolla"
 # get list of styles for a given set of years for a given model->make
-yrlist<-c(2008,2009,2011)
-#yrlist<-2008
-stylelist1<-lapply(c(2008,2009,2011), function(x) stylefn(pickmake,pickmodel,x))
-stylelist2<-lapply(yrlist, function(x) stylefn(pickmake,pickmodel,x))
-styledf=do.call(rbind,stylelist2)
+yrlist<-c(2008,2009,2010,2011,2012)
+stylelist<-lapply(yrlist, function(x) stylefn(pickmake,pickmodel,x))
+styledf=do.call(rbind,stylelist) #converts stylelist from list to DF
 
 # function to get tmv for a style with typically equipped vehicle
-valfn<-function(pickstyleid,pickzip){
-  print(styledf$styleid)
-  # URL to extract JSON file
+valfn<-function(pickstyleid,pickzip){ 
   resURL<-paste("http://api.edmunds.com/v1/api/tmv/tmvservice/calculatetypicallyequippedusedtmv?styleid=",
-               pickstyleid,
-               "&zip=",pickzip,"&api_key=",APIkey,"&fmt=json",sep="")
+                pickstyleid,
+                "&zip=",pickzip,"&api_key=",APIkey,"&fmt=json",sep="")
+  Sys.sleep(0.6)
   tmv<-fromJSON(getURLContent(resURL))
-  
+ 
   # market value (retail, private party and trade-in)
   tmv<-c(tmvretail=tmv$tmv$totalWithOptions$usedTmvRetail,
         tmvpp=tmv$tmv$totalWithOptions$usedPrivateParty,
         tmvtradein=tmv$tmv$totalWithOptions$usedTradeIn)
-  
+
   return(tmv)  
 }
 
 # test valfn
-pickstyleid<-"101209943"
+pickstyleid<-"100884950"
 pickzip<-"22203"
 test<-valfn(pickstyleid,pickzip);test
 
 # get tmv for a style with typically equipped vehicle for a list of styles
 pickzip<-"22203"
-#here's the problem. The below lapply runs fine if I replace styledf$styleid with a single
-#code.  It doesn't seem to like multiple codes (or 22 in this case).
 tmvlist<-lapply(styledf$styleid, function(x) valfn(x,pickzip))
-tmvlist<-lapply("101209943", function(x) valfn(x,pickzip))
-
 tmvdf<-do.call(rbind,tmvlist)
 tmvdf<-cbind(styledf,tmvdf)
+
 # remove records with zero tmvretail value
 tmvdf<-tmvdf[tmvdf$tmvretail > 0,]
 
@@ -122,8 +116,6 @@ ggplot(data=tmvdfS1,aes(x=factor(year),y=tmvmin,color=trim))+
   xlab("")+ylab("True Market Value (Retail) ($)")+theme_bw(20)
 
 
-
-
 # function to get tmv for options, condition, mileage for a style
 valoptfn<-function(pickstyleid,pickzip,pickmiles,pickcondition,pickoption){
   
@@ -133,7 +125,7 @@ valoptfn<-function(pickstyleid,pickzip,pickmiles,pickcondition,pickoption){
                "&optionid=",pickoption,
                "&fmt=json",sep="")
   tmv<-fromJSON(getURLContent(resURL))
-  
+  Sys.sleep(0.6)
   # TMV for options
   tmvopt<-c(tmvretail=tmv$tmv$optionTMVPrices[[1]]$usedTmvRetail,
            tmvpp=tmv$tmv$optionTMVPrices[[1]]$usedPrivateParty,
@@ -175,7 +167,7 @@ head(options)
 # test valoptfn
 pickzip<-"22203"
 pickmiles<-"120000"
-pickcondition=<-"clean"
+pickcondition<-"clean"
 pickoption<-"TMVU1008849501501000083"
 test<-valoptfn(pickstyleid,pickzip,pickmiles,pickcondition,pickoption)
 
